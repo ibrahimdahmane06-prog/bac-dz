@@ -1,0 +1,10 @@
+{
+  "name": "Remix: Remix: Remix: Remix: Remix: Remix: Remix: BAC Lettres \u0026 Philosophie DZ 2027",
+  "description": "تطبيق تعليمي متكامل لتلاميذ السنة الثالثة ثانوي شعبة الآداب والفلسفة في الجزائر. دروس، ملخصات، تمارين، مقالات فلسفية، ومساعد ذكي بالذكاء الاصطناعي.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

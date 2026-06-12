@@ -1,0 +1,204 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile and subscription data",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "displayName": { "type": "string" },
+        "email": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "isPremium": { "type": "boolean" },
+        "points": { "type": "number" },
+        "streakDays": { "type": "number" },
+        "lastActive": { "type": "string", "format": "date-time" },
+        "role": { "type": "string", "enum": ["student", "admin"] }
+      },
+      "required": ["uid", "email", "isPremium"]
+    },
+    "Subject": {
+      "title": "Subject",
+      "description": "Educational subject metadata",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "icon": { "type": "string" },
+        "color": { "type": "string" },
+        "order": { "type": "number" }
+      },
+      "required": ["id", "title"]
+    },
+    "Lesson": {
+      "title": "Lesson",
+      "description": "Lesson content and metadata",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "subjectId": { "type": "string" },
+        "unit": { "type": "string" },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "videoUrl": { "type": "string" },
+        "pdfUrl": { "type": "string" },
+        "audioUrl": { "type": "string" },
+        "isFree": { "type": "boolean" },
+        "order": { "type": "number" },
+        "quiz": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "question": { "type": "string" },
+              "options": { "type": "array", "items": { "type": "string" } },
+              "correctIndex": { "type": "number" }
+            }
+          }
+        }
+      },
+      "required": ["id", "subjectId", "title"]
+    },
+    "Essay": {
+      "title": "Philosophy Essay",
+      "description": "Methodology or sample philosophy essay",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "type": { "type": "string", "enum": ["dialectic", "investigation", "comparison"] },
+        "content": { "type": "string" },
+        "plan": { "type": "string" }
+      },
+      "required": ["id", "title", "type"]
+    },
+    "Progress": {
+      "title": "User Progress",
+      "description": "Tracks completed lessons and scores",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "lessonId": { "type": "string" },
+        "status": { "type": "string", "enum": ["visited", "completed"] },
+        "score": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "lessonId"]
+    },
+    "PaymentReceipt": {
+      "title": "Payment Receipt",
+      "description": "User uploaded payment receipts for subscription activation",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "receiptUrl": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "receiptUrl"]
+    },
+    "Exercise": {
+      "title": "Exercise Solution",
+      "description": "History of solved exercises via AI",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "solution": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "imageUrl", "solution"]
+    },
+    "PaymentMessage": {
+      "title": "Payment Message",
+      "description": "User feedback and premium plans requests",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "senderName": { "type": "string" },
+        "senderPhone": { "type": "string" },
+        "messageText": { "type": "string" },
+        "status": { "type": "string", "enum": ["unread", "read"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "messageText"]
+    },
+    "ForumPost": {
+      "title": "Forum Post",
+      "description": "A research discussion post shared by a user",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "category": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "likes": { "type": "array", "items": { "type": "string" } },
+        "reactions": { "type": "object" },
+        "reportsCount": { "type": "number" }
+      },
+      "required": ["title", "content", "userId"]
+    },
+    "ForumComment": {
+      "title": "Forum Comment",
+      "description": "Comments left on forum posts",
+      "type": "object",
+      "properties": {
+        "postId": { "type": "string" },
+        "content": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "reportsCount": { "type": "number" }
+      },
+      "required": ["postId", "content", "userId"]
+    }
+  },
+  "firestore": {
+    "users": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "subjects": {
+      "schema": "Subject",
+      "description": "List of subjects"
+    },
+    "subjects/{subjectId}/lessons": {
+      "schema": "Lesson",
+      "description": "Lessons organized by subject"
+    },
+    "philosophy_essays": {
+      "schema": "Essay",
+      "description": "Philosophy essay guides"
+    },
+    "users/{userId}/progress": {
+      "schema": "Progress",
+      "description": "User specific lesson tracking"
+    },
+    "payment_receipts": {
+      "schema": "PaymentReceipt",
+      "description": "Collection of subscription activation requests"
+    },
+    "users/{userId}/exercises": {
+      "schema": "Exercise",
+      "description": "Solved exercises history"
+    },
+    "payment_messages": {
+      "schema": "PaymentMessage",
+      "description": "Payment support issues and messages"
+    },
+    "forum_posts": {
+      "schema": "ForumPost",
+      "description": "Community research notes and discussions"
+    },
+    "forum_comments": {
+      "schema": "ForumComment",
+      "description": "Comments left on research posts"
+    }
+  }
+}

@@ -1,0 +1,196 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Global Helpers
+    function isSignedIn() { return request.auth != null; }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function isAdmin() { 
+      return isSignedIn() && (
+        request.auth.token.email == 'ibrahimdahmane06@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    
+    function isValidId(id) { 
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); 
+    }
+
+    // Entity Validations
+    function isValidUser(data) {
+      return data.uid == request.auth.uid &&
+             data.email is string && data.email.size() <= 256 &&
+             data.displayName is string && data.displayName.size() <= 128 &&
+             data.isPremium is bool &&
+             data.points is int &&
+             data.streakDays is int &&
+             data.role in ['student', 'admin'] &&
+             (data.coverURL == null || (data.coverURL is string && data.coverURL.size() <= 1024)) &&
+             (data.academicInfo == null || (
+                data.academicInfo.branch is string && data.academicInfo.branch.size() <= 128 &&
+                data.academicInfo.goal is string && data.academicInfo.goal.size() <= 128 &&
+                data.academicInfo.school is string && data.academicInfo.school.size() <= 128
+             ));
+    }
+
+    function isValidProgress(data) {
+      return data.userId == request.auth.uid &&
+             data.lessonId is string && data.lessonId.size() <= 128 &&
+             data.status in ['visited', 'completed'] &&
+             data.score is number &&
+             data.updatedAt == request.time;
+    }
+
+    function isValidReceipt(data) {
+      return data.userId is string &&
+             data.userEmail is string && data.userEmail.size() <= 256 &&
+             data.receiptUrl is string && data.receiptUrl.size() <= 150000 &&
+             data.status in ['pending', 'approved', 'rejected'] &&
+             (data.rejectionReason == null || (data.rejectionReason is string && data.rejectionReason.size() <= 1000));
+    }
+
+    function isValidExercise(data) {
+      return data.userId == request.auth.uid &&
+             data.imageUrl is string && data.imageUrl.size() <= 2048 &&
+             data.solution is string && data.solution.size() <= 50000 &&
+             data.createdAt == request.time;
+    }
+
+    function isValidPaymentMessage(data) {
+      return data.userId == request.auth.uid &&
+             data.userEmail is string && data.userEmail.size() <= 256 &&
+             data.senderName is string && data.senderName.size() <= 128 &&
+             data.senderPhone is string && data.senderPhone.size() <= 30 &&
+             data.messageText is string && data.messageText.size() <= 5000 &&
+             data.status in ['read', 'unread'] &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidPost(data) {
+      return data.userId == request.auth.uid &&
+             data.title is string && data.title.size() <= 300 &&
+             data.content is string && data.content.size() <= 50000 &&
+             data.category is string && data.category.size() <= 100 &&
+             data.userName is string && data.userName.size() <= 128 &&
+             data.userEmail is string && data.userEmail.size() <= 256 &&
+             data.likes is list && data.likes.size() <= 5000 &&
+             data.reportsCount is int && data.reportsCount >= 0;
+    }
+
+    function isValidComment(data) {
+      return data.userId == request.auth.uid &&
+             data.postId is string && data.postId.size() <= 128 &&
+             data.content is string && data.content.size() <= 10000 &&
+             data.userName is string && data.userName.size() <= 128 &&
+             data.userEmail is string && data.userEmail.size() <= 256 &&
+             data.reportsCount is int && data.reportsCount >= 0;
+    }
+
+    // Collection Rules
+    
+    // Users: Profiles
+    match /users/{userId} {
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if isOwner(userId) && isValidUser(incoming()) && incoming().isPremium == false && incoming().role == 'student';
+      allow update: if (isOwner(userId) || isAdmin()) && (
+        // Action: Update profile info
+        (incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'coverURL', 'academicInfo', 'lastActive'])) ||
+        // Action: Update stats
+        (incoming().diff(existing()).affectedKeys().hasOnly(['points', 'streakDays', 'lastActive'])) ||
+        // Admin: Update premium status
+        (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['isPremium', 'role']))
+      ) && isValidUser(incoming());
+    }
+
+    // Subjects: Metadata (Read Only for public, Admin for write)
+    match /subjects/{subjectId} {
+      allow read: if true;
+      allow write: if isAdmin();
+
+      // Lessons
+      match /lessons/{lessonId} {
+        allow read: if true; // In app logic: restrict content of non-free lessons if not premium
+        allow write: if isAdmin();
+      }
+    }
+
+    // Philosophy Essays
+    match /philosophy_essays/{essayId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Progress: Tracks user learning
+    match /users/{userId}/progress/{progressId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && isValidProgress(incoming());
+      allow update: if isOwner(userId) && isValidProgress(incoming()) && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'score', 'updatedAt']);
+      allow delete: if isOwner(userId) || isAdmin();
+    }
+
+    // Admin list
+    match /admins/{adminId} {
+      allow read: if isSignedIn();
+      allow write: if false; // Only manageable via Cloud Console
+    }
+
+    // Payment Receipts: Subscription activation requests
+    match /payment_receipts/{receiptId} {
+      allow get: if (isSignedIn() && existing().userId == request.auth.uid) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && incoming().userId == request.auth.uid && incoming().status == 'pending' && incoming().createdAt == request.time && isValidReceipt(incoming());
+      allow update: if isAdmin() && isValidReceipt(incoming()) && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'rejectionReason']);
+      allow delete: if isAdmin();
+    }
+
+    // Exercises: AI Solver history
+    match /users/{userId}/exercises/{exerciseId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && isValidExercise(incoming());
+      allow delete: if isOwner(userId) || isAdmin();
+    }
+
+    // Payment Messages: Support requests
+    match /payment_messages/{messageId} {
+      allow read: if isAdmin();
+      allow create: if isSignedIn() && incoming().createdAt == request.time && incoming().status == 'unread' && isValidPaymentMessage(incoming());
+      allow update: if isAdmin() && isValidPaymentMessage(incoming()) && incoming().diff(existing()).affectedKeys().hasOnly(['status']);
+      allow delete: if isAdmin();
+    }
+
+    // Forum Posts: Shared research and discussions
+    match /forum_posts/{postId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && incoming().createdAt == request.time && isValidPost(incoming());
+      allow update: if isSignedIn() && (
+        // Action: reaction or likes update
+        (incoming().diff(existing()).affectedKeys().hasOnly(['reactions', 'likes'])) ||
+        // Action: report increment
+        (incoming().diff(existing()).affectedKeys().hasOnly(['reportsCount']) && incoming().reportsCount == existing().reportsCount + 1) ||
+        // Role: Admin
+        isAdmin()
+      ) && (isAdmin() || (incoming().title == existing().title && incoming().content == existing().content && incoming().userId == existing().userId));
+      allow delete: if isAdmin();
+    }
+
+    // Forum Comments: Sub-discussion comments
+    match /forum_comments/{commentId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && incoming().createdAt == request.time && isValidComment(incoming());
+      allow update: if isSignedIn() && (
+        // Action: report increment
+        (incoming().diff(existing()).affectedKeys().hasOnly(['reportsCount']) && incoming().reportsCount == existing().reportsCount + 1) ||
+        // Role: Admin
+        isAdmin()
+      ) && (isAdmin() || (incoming().content == existing().content && incoming().postId == existing().postId && incoming().userId == existing().userId));
+      allow delete: if isAdmin();
+    }
+  }
+}
